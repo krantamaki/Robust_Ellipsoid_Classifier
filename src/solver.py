@@ -29,12 +29,12 @@ def dict_to_numpy(A):
     keys = list(A.keys())
     values = list(A.values())
 
-    if len(keys[0]) == 1:
+    if type(keys[0]) == int:
         return np.array(values)
 
     assert len(keys[0]) == 2, "More than two dimensions not yet supported!"
 
-    d = max(keys, key=lambda tup: tup[1])
+    d = max(keys, key=lambda tup: tup[1])[1]
     n = len(values) // d
 
     return np.array(values).reshape((n, d))
@@ -68,27 +68,27 @@ def full_model(X, Y, omega):
     model.c = pyo.Param(model.D)                                  # The center point of the ellipsoid
 
     model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.v = pyo.Var(model.Y_I, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
+    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
     model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)    # Variables for the diagonal of the matrix
     model.triag = pyo.Var(model.D, model.D)                       # Variables for the off-diagonal elements of the matrix
 
     # The objective function
     def obj(m):
         return m.o * sum(m.u[i] for i in m.X_i) + sum(m.v[i] for i in m.Y_i)
-    model.obj = pyo.Objective(rule=obj)
+    model.obj = pyo.Objective(rule=obj, sense=pyo.minimize)
 
     # The constraints for points in X
     def X_const(m, k):
         return m.u[k] - sum(m.diag[i] * (m.X[k, i] - m.c[i]) ** 2 for i in m.D) \
-               - 2 * sum(sum(m.triag[i, j] * (m.X[k, i] - m.c[i]) * (m.X[k, j] - m.c[j]) for j in pyo.RangeSet(1, i))
-                         for i in m.X_i) >= 0
+               - 2 * sum(sum(m.triag[i, j] * (m.X[k, i] - m.c[i]) * (m.X[k, j] - m.c[j]) for j in pyo.RangeSet(1, i - 1))
+                         for i in pyo.RangeSet(2, m.d)) >= 0
     model.X_const = pyo.Constraint(model.X_i, rule=X_const)
 
     # The constraints for point in Y
     def Y_const(m, k):
         return m.v[k] + sum(m.diag[j] * (m.Y[k, j] - m.c[j]) ** 2 for j in m.D) \
-               + 2 * sum(sum(m.triag[i, j] * (m.Y[k, i] - m.c[i]) * (m.Y[k, j] - m.c[j]) for j in pyo.RangeSet(1, i))
-                         for i in m.Y_i) - 2 >= 0
+               + 2 * sum(sum(m.triag[i, j] * (m.Y[k, i] - m.c[i]) * (m.Y[k, j] - m.c[j]) for j in pyo.RangeSet(1, i - 1))
+                         for i in pyo.RangeSet(2, m.d)) - 2 >= 0
     model.Y_const = pyo.Constraint(model.Y_i, rule=Y_const)
 
     # Initialize the data passed as parameters to the solver
@@ -107,8 +107,8 @@ def full_model(X, Y, omega):
     opt = pyo.SolverFactory("ipopt")
     result = opt.solve(instance)
 
-    diag = dict_to_numpy(pyo.value(model.diag))
-    triag = np.tril(dict_to_numpy(pyo.value(model.triag)), -1)  # np.tril applied just to make sure no odd values end up in result
+    diag = dict_to_numpy(instance.diag.extract_values())
+    triag = np.tril(dict_to_numpy(instance.triag.extract_values()), -1)  # np.tril applied just to make sure no odd values end up in result
 
     ret = triag + triag.T + diag
 
@@ -143,13 +143,13 @@ def ind_model(X, Y, omega):
     model.c = pyo.Param(model.D)                                  # The center point of the ellipsoid
 
     model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.v = pyo.Var(model.Y_I, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
+    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
     model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)    # Variables for the diagonal of the matrix
 
     # The objective function
     def obj(m):
         return m.o * sum(m.u[i] for i in m.X_i) + sum(m.v[i] for i in m.Y_i)
-    model.obj = pyo.Objective(rule=obj)
+    model.obj = pyo.Objective(rule=obj, sense=pyo.minimize)
 
     # The constraints for points in X
     def X_const(m, i):
@@ -179,8 +179,9 @@ def ind_model(X, Y, omega):
 
     # Return a sparse matrix corresponding with the characteristic matrix
     ret = sparse.csr_matrix((X.shape[1], X.shape[1]))
+    ret.setdiag(dict_to_numpy(instance.diag.extract_values()))
 
-    return ret.setdiag(dict_to_numpy(pyo.value(model.diag)))
+    return ret
 
 
 def banded_model(X, Y, omega, B):
@@ -215,14 +216,14 @@ def banded_model(X, Y, omega, B):
     model.c = pyo.Param(model.D)                                  # The center point of the ellipsoid
 
     model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.v = pyo.Var(model.Y_I, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
+    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
     model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)    # Variables for the diagonal of the matrix
     model.band = pyo.Var(model.B, model.D)                        # Variables for the band of the matrix
 
     # The objective function
     def obj(m):
         return m.o * sum(m.u[i] for i in m.X_i) + sum(m.v[i] for i in m.Y_i)
-    model.obj = pyo.Objective(rule=obj)
+    model.obj = pyo.Objective(rule=obj, sense=pyo.minimize)
 
     # The constraints for points in X
     def X_const(m, k):
@@ -258,9 +259,9 @@ def banded_model(X, Y, omega, B):
 
     # Return a sparse matrix corresponding with the characteristic matrix
     ret = sparse.csr_matrix((X.shape[1], X.shape[1]))
-    ret.setdiag(dict_to_numpy(pyo.value(model.diag)))
+    ret.setdiag(dict_to_numpy(instance.diag.extract_values()))
 
-    band = dict_to_numpy(pyo.value(model.band))
+    band = dict_to_numpy(instance.band.extract_values())
     for i, b in enumerate(B.tolist()):
         ret.setdiag(band[i, :], b)
         ret.setdiag(band[i, :], -b)

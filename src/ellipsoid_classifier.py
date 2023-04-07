@@ -254,8 +254,10 @@ class EllipsoidClassifier:
 
         if use_sem:
             search_dict = self.semantic_vectors
+            search_dim = self.sem_dim
         else:
             search_dict = dict([(label, node.center()) for label, node in self.nodes.items()])
+            search_dim = self.data_dim
 
         # Scale the points in X_test to match the ones used in training
         if self.scaling_factor != 1:
@@ -276,7 +278,7 @@ class EllipsoidClassifier:
             weights = softmax(weights)
 
             # Compute the weighted average for the vector to be approximated
-            avg = np.zeros((self.sem_dim,))
+            avg = np.zeros((search_dim,))
 
             for i, label in enumerate(labels):
                 avg += weights[i] * search_dict[label]
@@ -284,7 +286,7 @@ class EllipsoidClassifier:
             # Do a brute force search for the 1-nearest neighbour
             best_dist = float('inf')
             best_label = ""
-            for label in self.nodes:
+            for label in search_dict:
                 vect = search_dict[label]
                 dist = cdist([avg], [vect], metric)[0][0]
                 if dist < best_dist:
@@ -298,4 +300,4 @@ class EllipsoidClassifier:
         if y_test is not None:
             return np.sum(predictions == y_test) / y_test.shape[0]
 
-        return np.ndarray(predictions)
+        return predictions

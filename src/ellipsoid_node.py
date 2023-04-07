@@ -123,6 +123,6 @@ class EllipsoidNode:
         assert self.__center is not None and self.__matrix is not None, "Distance can be computed only if the center and the characteristic matrix are defined!"
 
         if type(self.__matrix) == sparse.csr_matrix:
-            return np.dot((point - self.__center), self.__matrix * (point - self.__center).T)
+            return np.dot((point - self.__center), self.__matrix @ (point - self.__center).T)
 
         return np.dot((point - self.__center), np.matmul(self.__matrix, (point - self.__center)))
