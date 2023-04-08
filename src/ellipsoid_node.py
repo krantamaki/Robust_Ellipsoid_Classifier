@@ -55,7 +55,7 @@ class EllipsoidNode:
         """
         self.__center = np.mean(X, axis=0).astype(np.float)
 
-    def find_matrix(self, X, Y, model, B, decomposition_splits, omega, verbose=False):
+    def find_matrix(self, X, Y, model, B, decomposition_splits, omega, verbose=False, eval=False):
         """
         Function wrapper for the functions in solver.py that call the Ipopt solver to solve for the
         characteristic matrix A
@@ -87,6 +87,7 @@ class EllipsoidNode:
         :param omega: float representing the correcting coefficient for possible disparity between the sizes
         of sets X and Y
         :param verbose: Optional. boolean stating whether the optimization information is to be printed
+        :param eval: Optional. boolean stating whether the training accuracy of the model should be evaluated.
         :return: Void
         """
         assert X.shape[1] == Y.shape[1], "The dimensions of the datapoints must match!"
@@ -95,6 +96,9 @@ class EllipsoidNode:
 
         if decomposition_splits != 0:
             assert X.shape[1] % decomposition_splits == 0, "Can't divide the problem into given amount of equal subproblems!"
+
+        if self.__center is None:
+            self.find_center(X)
 
         if model.lower().strip() == "full":
             assert decomposition_splits == 0, "Decomposition not supported for full matrices!"
@@ -115,6 +119,9 @@ class EllipsoidNode:
         else:
             raise RuntimeError("Improper model definition given!")
 
+        if eval:
+            self.__acc = sum([1 for x in X if self.dist(x) < 0]) / X.shape[0]
+
     def dist(self, point):
         """
         Computes the distance from the surface of the ellipse to the given point as (p - c)^T A(p - c)
@@ -125,6 +132,6 @@ class EllipsoidNode:
 
         point = point.astype(np.float)
         if type(self.__matrix) == sparse.csr_matrix:
-            return np.dot((point - self.__center), self.__matrix * (point - self.__center))
+            return np.dot((point - self.__center), self.__matrix @ (point - self.__center).T)
 
         return np.dot((point - self.__center), np.matmul(self.__matrix, (point - self.__center)))
