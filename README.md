@@ -8,7 +8,7 @@ lacks practically all references and proofs for theorems.
 ## Dependencies
 The classifier utilises the common scientific computing libraries like numpy and scipy
 and crucially the optimization library Pyomo (install with "pip install 'pyomo[optional]'")
-and solver Ipopt, which can be downloaded from https://www.coin-or.org/download/binary/Ipopt/.
+and solver Ipopt, which can be downloaded from https://github.com/coin-or/Ipopt/releases.
 This site contains the precompiled binaries for Ipopt as building from source can be a bit 
 challenging. Once the executable is saved into some directory one must make sure the directory
 is found in PATH. It is good to note that the precompiled binary comes with MUMPS linear solver

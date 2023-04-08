@@ -48,7 +48,6 @@ def leave_n_out_split(X, y, n,
 
         for label in labels:
             if label not in excluded_labels:
-                print(f"Included label: {label}")
                 label_indexes = [i for i in range(len(y)) if y[i] == label]
                 shuffle(label_indexes)
                 split_index = int(split_ratio * len(label_indexes))

@@ -53,9 +53,9 @@ class EllipsoidNode:
         :param X: numpy.ndarray of shape (m, d) containing the data points with the correct label
         :return: Void
         """
-        self.__center = np.mean(X, axis=0)
+        self.__center = np.mean(X, axis=0).astype(np.float)
 
-    def find_matrix(self, X, Y, model, B, decomposition_splits, omega):
+    def find_matrix(self, X, Y, model, B, decomposition_splits, omega, verbose=False):
         """
         Function wrapper for the functions in solver.py that call the Ipopt solver to solve for the
         characteristic matrix A
@@ -86,6 +86,7 @@ class EllipsoidNode:
         be divided
         :param omega: float representing the correcting coefficient for possible disparity between the sizes
         of sets X and Y
+        :param verbose: Optional. boolean stating whether the optimization information is to be printed
         :return: Void
         """
         assert X.shape[1] == Y.shape[1], "The dimensions of the datapoints must match!"
@@ -97,19 +98,19 @@ class EllipsoidNode:
 
         if model.lower().strip() == "full":
             assert decomposition_splits == 0, "Decomposition not supported for full matrices!"
-            self.__matrix = full_model(X, Y, omega)
+            self.__matrix = full_model(X, Y, omega, verbose=verbose)
 
         elif model.lower().strip() == "ind":
             if decomposition_splits != 0:
-                self.__matrix = decomposition(X, Y, model, B, decomposition_splits, omega)
+                self.__matrix = decomposition(X, Y, model, B, decomposition_splits, omega, verbose=verbose)
             else:
-                self.__matrix = ind_model(X, Y, omega)
+                self.__matrix = ind_model(X, Y, omega, verbose=verbose)
 
         elif model.lower().strip() == "banded" and B is not None:
             if decomposition_splits != 0:
-                self.__matrix = decomposition(X, Y, model, B, decomposition_splits, omega)
+                self.__matrix = decomposition(X, Y, model, B, decomposition_splits, omega, verbose=verbose)
             else:
-                self.__matrix = banded_model(X, Y, omega, B)
+                self.__matrix = banded_model(X, Y, omega, B, verbose=verbose)
 
         else:
             raise RuntimeError("Improper model definition given!")
@@ -122,7 +123,8 @@ class EllipsoidNode:
         """
         assert self.__center is not None and self.__matrix is not None, "Distance can be computed only if the center and the characteristic matrix are defined!"
 
+        point = point.astype(np.float)
         if type(self.__matrix) == sparse.csr_matrix:
-            return np.dot((point - self.__center), self.__matrix @ (point - self.__center).T)
+            return np.dot((point - self.__center), self.__matrix * (point - self.__center))
 
         return np.dot((point - self.__center), np.matmul(self.__matrix, (point - self.__center)))

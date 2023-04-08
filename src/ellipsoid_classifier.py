@@ -55,7 +55,7 @@ class EllipsoidClassifier:
 
         return ret_dict
 
-    def __train_node__(self, label, grouped_points, model, B, decomposition_splits, omega):
+    def __train_node__(self, label, grouped_points, model, B, decomposition_splits, omega, verbose):
         """
         Helper function that wraps multiple operations within it
         :param label: The label of the node to be trained
@@ -71,6 +71,7 @@ class EllipsoidClassifier:
         be divided
         :param omega: float representing the correcting coefficient for possible disparity between the sizes
         of sets X and Y
+        :param verbose: boolean stating whether the optimization information is to be printed
         :return: Void
         """
         X = grouped_points[label]
@@ -91,10 +92,10 @@ class EllipsoidClassifier:
         # Train the node
         new_node = EllipsoidNode(label)
         new_node.find_center(X)
-        new_node.find_matrix(X, Y, model, B, decomposition_splits, omega)
+        new_node.find_matrix(X, Y, model, B, decomposition_splits, omega, verbose=verbose)
         self.nodes[label] = new_node
 
-    def __par_train_node__(self, label, grouped_points, ret_dict, model, B, decomposition_splits, omega):
+    def __par_train_node__(self, label, grouped_points, ret_dict, model, B, decomposition_splits, omega, verbose):
         """
         Helper function that wraps multiple operations within it so that they can be called in parallel pool
         :param label: The label of the node to be trained
@@ -110,6 +111,7 @@ class EllipsoidClassifier:
         be divided
         :param omega: float representing the correcting coefficient for possible disparity between the sizes
         of sets X and Y
+        :param verbose: boolean stating whether the optimization information is to be printed
         :return: Void
         """
         X = grouped_points[label]
@@ -130,10 +132,10 @@ class EllipsoidClassifier:
         # Train the node
         new_node = EllipsoidNode(label)
         new_node.find_center(X)
-        new_node.find_matrix(X, Y, model, B, decomposition_splits, omega)
+        new_node.find_matrix(X, Y, model, B, decomposition_splits, omega, verbose=verbose)
         ret_dict[label] = new_node
 
-    def train(self, X, y, model, parallel=False, B=None, decomposition_splits=0, omega=1):
+    def train(self, X, y, model, parallel=False, B=None, decomposition_splits=0, omega=1, verbose=False):
         """
         Train the model by sequentially optimizing the balls for each individual node.
         :param X: The data array. A numpy.ndarray of shape (n, d)
@@ -150,6 +152,7 @@ class EllipsoidClassifier:
         be divided. Defaults to 0
         :param omega: Optional. float representing the correcting coefficient for possible disparity between the sizes
         of sets X and Y. Defaults to 1
+        :param verbose: Optional. boolean stating whether the optimization information is to be printed
         :return: Void
         """
         assert X.shape[0] == y.shape[0], "The number of points must match with the number of labels!"
@@ -164,7 +167,8 @@ class EllipsoidClassifier:
             ret_dict = manager.dict()
             processes = []
             for label in grouped_points:
-                process = Process(target=self.__par_train_node__, args=(label, grouped_points, ret_dict, model, B, decomposition_splits, omega))
+                process = Process(target=self.__par_train_node__, args=(label, grouped_points, ret_dict, model, B,
+                                                                        decomposition_splits, omega, verbose))
                 processes.append(process)
                 process.start()
 
@@ -176,7 +180,7 @@ class EllipsoidClassifier:
 
         else:
             for label in grouped_points:
-                self.__train_node__(label, grouped_points, model, B, decomposition_splits, omega)
+                self.__train_node__(label, grouped_points, model, B, decomposition_splits, omega, verbose)
 
     def eval(self):
         """

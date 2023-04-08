@@ -10,7 +10,6 @@ def to_index_dict(A):
     :param A: numpy.ndarray of shape (n, m) or (n, )
     :return: python dictionary of form (indexes) -> value
     """
-
     if len(A.shape) == 1:
         return dict([(i + 1, val) for i, val in enumerate(A.tolist())])
 
@@ -40,7 +39,7 @@ def dict_to_numpy(A):
     return np.array(values).reshape((n, d))
 
 
-def full_model(X, Y, omega):
+def full_model(X, Y, omega, verbose=False):
     """
     Solves the optimization problem associated with the full model of the classifier. See section
     5.1 in "Zero_shot_classifier_based_on_robust_ellipsoid_optimization.pdf" for more information
@@ -48,29 +47,30 @@ def full_model(X, Y, omega):
     :param Y: numpy.ndarray of shape (y_samples, dim) containing the datapoints with the incorrect label
     :param omega: float representing the correcting coefficient for possible disparity between the sizes
     of sets X and Y
+    :param verbose: Optional. boolean stating whether the optimization information is to be printed
     :return: numpy.ndarray corresponding with the found characteristic matrix
     """
 
     # Define the Pyomo model
     model = pyo.AbstractModel()
 
-    model.m = pyo.Param(within=pyo.NonNegativeIntegers)           # Number of points in set X
-    model.n = pyo.Param(within=pyo.NonNegativeIntegers)           # Number of points in set Y
-    model.d = pyo.Param(within=pyo.NonNegativeIntegers)           # Dimension of the datapoints
-    model.o = pyo.Param()                                         # Omega coefficient
+    model.m = pyo.Param(within=pyo.NonNegativeIntegers, initialize=X.shape[0])  # Number of points in set X
+    model.n = pyo.Param(within=pyo.NonNegativeIntegers, initialize=Y.shape[0])  # Number of points in set Y
+    model.d = pyo.Param(within=pyo.NonNegativeIntegers, initialize=Y.shape[1])  # Dimension of the datapoints
+    model.o = pyo.Param(initialize=omega)                                       # Omega coefficient
 
-    model.X_i = pyo.RangeSet(1, model.m)                          # Set of indexes for points in set X
-    model.Y_i = pyo.RangeSet(1, model.n)                          # Set of indexes for points in set Y
-    model.D = pyo.RangeSet(1, model.d)                            # Set of indexes for each feature
+    model.X_i = pyo.RangeSet(1, model.m)                                        # Set of indexes for points in set X
+    model.Y_i = pyo.RangeSet(1, model.n)                                        # Set of indexes for points in set Y
+    model.D = pyo.RangeSet(1, model.d)                                          # Set of indexes for each feature
 
-    model.X = pyo.Param(model.X_i, model.D)                       # The set X of points with correct label
-    model.Y = pyo.Param(model.Y_i, model.D)                       # The set Y of points with incorrect label
-    model.c = pyo.Param(model.D)                                  # The center point of the ellipsoid
+    model.X = pyo.Param(model.X_i, model.D, initialize=to_index_dict(X))        # The set X of points with correct label
+    model.Y = pyo.Param(model.Y_i, model.D, initialize=to_index_dict(Y))        # The set Y of points with incorrect label
+    model.c = pyo.Param(model.D, initialize=to_index_dict(np.mean(X, axis=0)))  # The center point of the ellipsoid
 
-    model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)    # Variables for the diagonal of the matrix
-    model.triag = pyo.Var(model.D, model.D)                       # Variables for the off-diagonal elements of the matrix
+    model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)                   # Relaxing variables for the points in X
+    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)                   # Relaxing variables for the points in X
+    model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)                  # Variables for the diagonal of the matrix
+    model.triag = pyo.Var(model.D, model.D)                                     # Variables for the off-diagonal elements of the matrix
 
     # The objective function
     def obj(m):
@@ -91,21 +91,17 @@ def full_model(X, Y, omega):
                          for i in pyo.RangeSet(2, m.d)) - 2 >= 0
     model.Y_const = pyo.Constraint(model.Y_i, rule=Y_const)
 
-    # Initialize the data passed as parameters to the solver
-    data_init = {None: {
-        'm': {None: X.shape[0]},
-        'n': {None: Y.shape[0]},
-        'd': {None: Y.shape[1]},
-        'o': {None: omega},
-        'X': to_index_dict(X),
-        'Y': to_index_dict(Y),
-        'c': to_index_dict(np.mean(X, axis=0))
-    }}
-    instance = model.create_instance(data_init)
+    # Form the solvable instance
+    instance = model.create_instance()
 
     # Define the solver and pass it the created instance
     opt = pyo.SolverFactory("ipopt")
-    result = opt.solve(instance)
+    if verbose:
+        opt.options["print_level"] = 6
+        result = opt.solve(instance, tee=True)
+    else:
+        opt.options["print_level"] = 0
+        result = opt.solve(instance, tee=False)
 
     diag = dict_to_numpy(instance.diag.extract_values())
     triag = np.tril(dict_to_numpy(instance.triag.extract_values()), -1)  # np.tril applied just to make sure no odd values end up in result
@@ -115,7 +111,7 @@ def full_model(X, Y, omega):
     return ret
 
 
-def ind_model(X, Y, omega):
+def ind_model(X, Y, omega, verbose=False):
     """
     Solves the optimization problem associated with the independent model of the classifier. See section
     5.2 in "Zero_shot_classifier_based_on_robust_ellipsoid_optimization.pdf" for more information
@@ -123,28 +119,28 @@ def ind_model(X, Y, omega):
     :param Y: numpy.ndarray of shape (y_samples, dim) containing the datapoints with the incorrect label
     :param omega: float representing the correcting coefficient for possible disparity between the sizes
     of sets X and Y
+    :param verbose: Optional. boolean stating whether the optimization information is to be printed
     :return: scipy.sparse.csr matrix corresponding with the found characteristic matrix
     """
-
     # Define the Pyomo model
     model = pyo.AbstractModel()
 
-    model.m = pyo.Param(within=pyo.NonNegativeIntegers)           # Number of points in set X
-    model.n = pyo.Param(within=pyo.NonNegativeIntegers)           # Number of points in set Y
-    model.d = pyo.Param(within=pyo.NonNegativeIntegers)           # Dimension of the datapoints
-    model.o = pyo.Param()                                         # Omega coefficient
+    model.m = pyo.Param(within=pyo.NonNegativeIntegers, initialize=X.shape[0])  # Number of points in set X
+    model.n = pyo.Param(within=pyo.NonNegativeIntegers, initialize=Y.shape[0])  # Number of points in set Y
+    model.d = pyo.Param(within=pyo.NonNegativeIntegers, initialize=Y.shape[1])  # Dimension of the datapoints
+    model.o = pyo.Param(initialize=omega)                                       # Omega coefficient
 
-    model.X_i = pyo.RangeSet(1, model.m)                          # Set of indexes for points in set X
-    model.Y_i = pyo.RangeSet(1, model.n)                          # Set of indexes for points in set Y
-    model.D = pyo.RangeSet(1, model.d)                            # Set of indexes for each feature
+    model.X_i = pyo.RangeSet(1, model.m)                                        # Set of indexes for points in set X
+    model.Y_i = pyo.RangeSet(1, model.n)                                        # Set of indexes for points in set Y
+    model.D = pyo.RangeSet(1, model.d)                                          # Set of indexes for each feature
 
-    model.X = pyo.Param(model.X_i, model.D)                       # The set X of points with correct label
-    model.Y = pyo.Param(model.Y_i, model.D)                       # The set Y of points with incorrect label
-    model.c = pyo.Param(model.D)                                  # The center point of the ellipsoid
+    model.X = pyo.Param(model.X_i, model.D, initialize=to_index_dict(X))        # The set X of points with correct label
+    model.Y = pyo.Param(model.Y_i, model.D, initialize=to_index_dict(Y))        # The set Y of points with incorrect label
+    model.c = pyo.Param(model.D, initialize=to_index_dict(np.mean(X, axis=0)))  # The center point of the ellipsoid
 
-    model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)    # Variables for the diagonal of the matrix
+    model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)                   # Relaxing variables for the points in X
+    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)                   # Relaxing variables for the points in X
+    model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)                  # Variables for the diagonal of the matrix
 
     # The objective function
     def obj(m):
@@ -161,30 +157,27 @@ def ind_model(X, Y, omega):
         return m.v[i] + sum(m.diag[j] * (m.Y[i, j] - m.c[j]) ** 2 for j in m.D) - 2 >= 0
     model.Y_const = pyo.Constraint(model.Y_i, rule=Y_const)
 
-    # Initialize the data passed as parameters to the solver
-    data_init = {None: {
-        'm': {None: X.shape[0]},
-        'n': {None: Y.shape[0]},
-        'd': {None: Y.shape[1]},
-        'o': {None: omega},
-        'X': to_index_dict(X),
-        'Y': to_index_dict(Y),
-        'c': to_index_dict(np.mean(X, axis=0))
-    }}
-    instance = model.create_instance(data_init)
+    # Form the solvable instance
+    instance = model.create_instance()
 
     # Define the solver and pass it the created instance
     opt = pyo.SolverFactory("ipopt")
-    result = opt.solve(instance)
+    if verbose:
+        opt.options["print_level"] = 6
+        result = opt.solve(instance, tee=True)
+    else:
+        opt.options["print_level"] = 0
+        result = opt.solve(instance, tee=False)
 
     # Return a sparse matrix corresponding with the characteristic matrix
-    ret = sparse.csr_matrix((X.shape[1], X.shape[1]))
-    ret.setdiag(dict_to_numpy(instance.diag.extract_values()))
+    ret = sparse.csr_matrix((X.shape[1], X.shape[1]), dtype=np.float)
+
+    ret.setdiag(dict_to_numpy(instance.diag.extract_values()).astype(np.float))
 
     return ret
 
 
-def banded_model(X, Y, omega, B):
+def banded_model(X, Y, omega, B, verbose=False):
     """
     Solves the optimization problem associated with the banded model of the classifier. See section
     5.3 in "Zero_shot_classifier_based_on_robust_ellipsoid_optimization.pdf" for more information
@@ -193,32 +186,34 @@ def banded_model(X, Y, omega, B):
     :param omega: float representing the correcting coefficient for possible disparity between the sizes
     of sets X and Y
     :param B: numpy.ndarray of shape (m, ) containing the deviations from the main diagonal associated with the band
+    :param verbose: Optional. boolean stating whether the optimization information is to be printed
     :return: scipy.sparse.csr matrix corresponding with the found characteristic matrix
     """
 
     # Define the Pyomo model
     model = pyo.AbstractModel()
 
-    model.m = pyo.Param(within=pyo.NonNegativeIntegers)           # Number of points in set X
-    model.n = pyo.Param(within=pyo.NonNegativeIntegers)           # Number of points in set Y
-    model.d = pyo.Param(within=pyo.NonNegativeIntegers)           # Dimension of the datapoints
-    model.o = pyo.Param()                                         # Omega coefficient
-    model.lenB = pyo.Param(within=pyo.NonNegativeIntegers)        # Number of deviations in B
+    model.m = pyo.Param(within=pyo.NonNegativeIntegers, initialize=X.shape[0])  # Number of points in set X
+    model.n = pyo.Param(within=pyo.NonNegativeIntegers, initialize=Y.shape[0])  # Number of points in set Y
+    model.d = pyo.Param(within=pyo.NonNegativeIntegers, initialize=Y.shape[1])  # Dimension of the datapoints
+    model.o = pyo.Param(initialize=omega)                                       # Omega coefficient
+    # model.lenB = pyo.Param(within=pyo.NonNegativeIntegers)                    # Number of deviations in B
 
-    model.X_i = pyo.RangeSet(1, model.m)                          # Set of indexes for points in set X
-    model.Y_i = pyo.RangeSet(1, model.n)                          # Set of indexes for points in set Y
-    model.D = pyo.RangeSet(1, model.d)                            # Set of indexes for each feature
-    model.B_i = pyo.RangeSet(1, model.lenB)                       # Set of indexes for the deviations
+    model.X_i = pyo.RangeSet(1, model.m)                                        # Set of indexes for points in set X
+    model.Y_i = pyo.RangeSet(1, model.n)                                        # Set of indexes for points in set Y
+    model.D = pyo.RangeSet(1, model.d)                                          # Set of indexes for each feature
+    # model.B_i = pyo.RangeSet(1, model.lenB)                                   # Set of indexes for the deviations
 
-    model.B = pyo.Param(model.B_i)                                # Set of deviations from the main diagonal
-    model.X = pyo.Param(model.X_i, model.D)                       # The set X of points with correct label
-    model.Y = pyo.Param(model.Y_i, model.D)                       # The set Y of points with incorrect label
-    model.c = pyo.Param(model.D)                                  # The center point of the ellipsoid
+    model.B = pyo.Set(initialize=B.tolist())                                    # Set of deviations from the main diagonal
 
-    model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)     # Relaxing variables for the points in X
-    model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)    # Variables for the diagonal of the matrix
-    model.band = pyo.Var(model.B, model.D)                        # Variables for the band of the matrix
+    model.X = pyo.Param(model.X_i, model.D, initialize=to_index_dict(X))        # The set X of points with correct label
+    model.Y = pyo.Param(model.Y_i, model.D, initialize=to_index_dict(Y))        # The set Y of points with incorrect label
+    model.c = pyo.Param(model.D, initialize=to_index_dict(np.mean(X, axis=0)))  # The center point of the ellipsoid
+
+    model.u = pyo.Var(model.X_i, domain=pyo.NonNegativeReals)                   # Relaxing variables for the points in X
+    model.v = pyo.Var(model.Y_i, domain=pyo.NonNegativeReals)                   # Relaxing variables for the points in X
+    model.diag = pyo.Var(model.D, domain=pyo.NonNegativeReals)                  # Variables for the diagonal of the matrix
+    model.band = pyo.Var(model.B, model.D)                                      # Variables for the band of the matrix
 
     # The objective function
     def obj(m):
@@ -228,48 +223,42 @@ def banded_model(X, Y, omega, B):
     # The constraints for points in X
     def X_const(m, k):
         return m.u[k] - sum(m.diag[i] * (m.X[k, i] - m.c[i]) ** 2 for i in m.D) \
-               - 2 * sum(sum(m.band[j, i - m.B[j]] * (m.X[k, i] - m.c[i]) * (m.X[k, i - m.B[j]] - m.c[i - m.B[j]])
-                             for i in pyo.RangeSet(m.B[j] + 1, m.d)) for j in m.B_i) >= 0
+               - 2 * sum(m.band[db, i - db] * (m.X[k, i] - m.c[i]) * (m.X[k, i - db] - m.c[i - db])
+                         for db in m.B for i in pyo.RangeSet(db + 1, m.d)) >= 0
     model.X_const = pyo.Constraint(model.X_i, rule=X_const)
 
     # The constraints for point in Y
     def Y_const(m, k):
         return m.v[k] + sum(m.diag[i] * (m.Y[k, i] - m.c[i]) ** 2 for i in m.D) \
-               - 2 * sum(sum(m.band[j, i - m.B[j]] * (m.Y[k, i] - m.c[i]) * (m.Y[k, i - m.B[j]] - m.c[i - m.B[j]])
-                             for i in pyo.RangeSet(m.B[j] + 1, m.d)) for j in m.B_i) - 2 >= 0
+               + 2 * sum(m.band[db, i - db] * (m.Y[k, i] - m.c[i]) * (m.Y[k, i - db] - m.c[i - db])
+                         for db in m.B for i in pyo.RangeSet(db + 1, m.d)) - 2 >= 0
     model.Y_const = pyo.Constraint(model.Y_i, rule=Y_const)
 
-    # Initialize the data passed as parameters to the solver
-    data_init = {None: {
-        'm': {None: X.shape[0]},
-        'n': {None: Y.shape[0]},
-        'd': {None: Y.shape[1]},
-        'o': {None: omega},
-        'lenB': {None, len(B)},
-        'B': {None: B.tolist()},
-        'X': to_index_dict(X),
-        'Y': to_index_dict(Y),
-        'c': to_index_dict(np.mean(X, axis=0))
-    }}
-    instance = model.create_instance(data_init)
+    # Form the solvable instance
+    instance = model.create_instance()
 
     # Define the solver and pass it the created instance
     opt = pyo.SolverFactory("ipopt")
-    result = opt.solve(instance)
+    if verbose:
+        opt.options["print_level"] = 6
+        result = opt.solve(instance, tee=True)
+    else:
+        opt.options["print_level"] = 0
+        result = opt.solve(instance, tee=False)
 
     # Return a sparse matrix corresponding with the characteristic matrix
-    ret = sparse.csr_matrix((X.shape[1], X.shape[1]))
-    ret.setdiag(dict_to_numpy(instance.diag.extract_values()))
+    ret = sparse.csr_matrix((X.shape[1], X.shape[1]), dtype=np.float)
+    ret.setdiag(dict_to_numpy(instance.diag.extract_values()).astype(np.float))
 
     band = dict_to_numpy(instance.band.extract_values())
     for i, b in enumerate(B.tolist()):
-        ret.setdiag(band[i, :], b)
-        ret.setdiag(band[i, :], -b)
+        ret.setdiag(band[i, :].astype(np.float), b)
+        ret.setdiag(band[i, :].astype(np.float), -b)
 
     return ret
 
 
-def decomposition(X, Y, model, B, decomposition_splits, omega):
+def decomposition(X, Y, model, B, decomposition_splits, omega, verbose=False):
     """
     Decomposes the problem into wanted sized chunks as laid out in section 5.4 of
     "Zero_shot_classifier_based_on_robust_ellipsoid_optimization.pdf" and calls the wanted model for
@@ -285,6 +274,7 @@ def decomposition(X, Y, model, B, decomposition_splits, omega):
     :param decomposition_splits: int denoting to how many subproblems the given optimization task should
     be divided
     :param omega: float representing the correcting coefficient for possible disparity between the sizes
+    :param verbose: Optional. boolean stating whether the optimization information is to be printed
     of sets X and Y
     """
     # Empty list for the found matrices
@@ -300,9 +290,9 @@ def decomposition(X, Y, model, B, decomposition_splits, omega):
         Y0 = Y[:, i * d0:(i + 1) * d0]
 
         if model == "ind":
-            matrices.append(ind_model(X0, Y0, omega))
+            matrices.append(ind_model(X0, Y0, omega, verbose=verbose))
         elif model == "banded":
-            matrices.append(banded_model(X0, Y0, omega, B))
+            matrices.append(banded_model(X0, Y0, omega, B, verbose=verbose))
         else:
             raise RuntimeError("Improper model definition given!")
 
