@@ -80,15 +80,15 @@ def full_model(X, Y, omega, verbose=False):
     # The constraints for points in X
     def X_const(m, k):
         return m.u[k] - sum(m.diag[i] * (m.X[k, i] - m.c[i]) ** 2 for i in m.D) \
-               - 2 * sum(sum(m.triag[i, j] * (m.X[k, i] - m.c[i]) * (m.X[k, j] - m.c[j]) for j in pyo.RangeSet(1, i - 1))
-                         for i in pyo.RangeSet(2, m.d)) >= 0
+               - 2 * sum(m.triag[i, j] * (m.X[k, i] - m.c[i]) * (m.X[k, j] - m.c[j]) for i in pyo.RangeSet(2, m.d)
+                         for j in pyo.RangeSet(1, i - 1)) >= 0
     model.X_const = pyo.Constraint(model.X_i, rule=X_const)
 
     # The constraints for point in Y
     def Y_const(m, k):
         return m.v[k] + sum(m.diag[j] * (m.Y[k, j] - m.c[j]) ** 2 for j in m.D) \
-               + 2 * sum(sum(m.triag[i, j] * (m.Y[k, i] - m.c[i]) * (m.Y[k, j] - m.c[j]) for j in pyo.RangeSet(1, i - 1))
-                         for i in pyo.RangeSet(2, m.d)) - 2 >= 0
+               + 2 * sum(m.triag[i, j] * (m.Y[k, i] - m.c[i]) * (m.Y[k, j] - m.c[j]) for i in pyo.RangeSet(2, m.d)
+                         for j in pyo.RangeSet(1, i - 1)) - 2 >= 0
     model.Y_const = pyo.Constraint(model.Y_i, rule=Y_const)
 
     # Form the solvable instance
@@ -103,10 +103,12 @@ def full_model(X, Y, omega, verbose=False):
         opt.options["print_level"] = 0
         result = opt.solve(instance, tee=False)
 
-    diag = dict_to_numpy(instance.diag.extract_values())
-    triag = np.tril(dict_to_numpy(instance.triag.extract_values()), -1)  # np.tril applied just to make sure no odd values end up in result
+    diag = dict_to_numpy(instance.diag.extract_values()).astype(np.float)
 
-    ret = triag + triag.T + diag
+    # np.tril applied just to make sure no odd values end up in result
+    triag = np.tril(dict_to_numpy(instance.triag.extract_values()).astype(np.float), -1)
+
+    ret = triag + triag.T + np.diag(diag)
 
     return ret
 
