@@ -199,7 +199,7 @@ class EllipsoidClassifier:
         assert len(self.nodes) > 0, "The model must be trained!"
         return sum([node.accuracy() for label, node in self.nodes.items()]) / len(self.nodes)
 
-    def add_sematic_vectors(self, S, y):
+    def add_semantic_vectors(self, S, y):
         """
         Adds the semantic vectors into memory for use in zero-shot predicting
         Note! Each label used in training should be in the label array and each label can be exactly

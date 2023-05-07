@@ -91,7 +91,7 @@ def main():
         knn = KNeighborsClassifier(k, weights="uniform").fit(X_train, y_train)
 
         # Pass semantic information to the model
-        model.add_sematic_vectors(S, sem_y)
+        model.add_semantic_vectors(S, sem_y)
 
         # Test the algorithms with semantic vectors and without
         sem_acc.append(model.predict(X_test, y_test, use_sem=True))
