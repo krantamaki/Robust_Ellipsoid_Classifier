@@ -93,7 +93,7 @@ def main():
 
         knn = KNeighborsClassifier(k, weights="uniform").fit(X_train, y_train)
 
-        # Test the algorithms with semantic vectors and without
+        # Test the algorithms
         mod_svm_acc.append(model.predict(X_test, y_test))
 
         y_hat = knn.predict(X_test)
