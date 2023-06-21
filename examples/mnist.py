@@ -20,8 +20,7 @@ def sample_to_numpy(sample, excluded_cols):
 
 
 def rescale(X, scaling_factor):
-    scaler = scaling_factor * np.identity(X.shape[1])
-    return np.array([np.matmul(scaler, x) for x in X])
+    return np.array([scaling_factor * x for x in X])
 
 
 def main():

@@ -138,8 +138,10 @@ def gen_points(mean, deviation, n):
 
 def main():
     # Means and standard deviations for given labels
-    means = [(1., 1.), (1., 2.), (2., 1.), (2., 2.)]
+    means = [(0.5, 2.), (1, 1.75), (1.5, 1.25), (2., 1.)]
     deviations = [(0.12, 0.08), (0.13, 0.17), (0.16, 0.11), (0.16, 0.07)]
+    # means = [(1., 1.), (1., 2.), (2., 1.), (2., 2.), (1.5, 2.5), (0.4, 1.6), (0.5, 0.8), (2., 1.6)]
+    # deviations = [(0.12, 0.08), (0.13, 0.17), (0.16, 0.11), (0.16, 0.07), (0.11, 0.1), (0.03, 0.05), (0.12, 0.19), (0.07, 0.1)]
 
     n = 50
 
@@ -154,15 +156,17 @@ def main():
     viz_ellipsoid(y0, X0, labels, model)
 
     # Unseen label
-    mean_unseen = (1.5, 1.5)
-    dev_unseen = (0.1, 0.1)
-    label_unseen = f"$\mu$: {mean_unseen}, $\sigma^2$: {dev_unseen}"
+    # mean_unseen = (1.5, 1.5)
+    # dev_unseen = (0.1, 0.1)
+    unseen_means = [(0.5, 0.5)]  # , (0.75, 1.5)]
+    unseen_deviations = [(0.1, 0.11)]  # , (0.12, 0.06)]
+    unseen_labels = [f"$\mu$: {unseen_means[i]}, $\sigma^2$: {unseen_deviations[i]}" for i in range(len(unseen_means))]
 
-    X = np.concatenate([X0, gen_points(mean_unseen, dev_unseen, n)])
-    y = np.concatenate([y0, [label_unseen] * n])
-    labels.append(label_unseen)
+    X = np.concatenate([X0, *[gen_points(unseen_means[i],unseen_deviations[i], n) for i in range(len(unseen_means))]])
+    y = np.concatenate([y0, *[[unseen_labels[i]] * n for i in range(len(unseen_means))]])
+    labels += unseen_labels
 
-    S = np.array(means + [mean_unseen])
+    S = np.array(means + unseen_means)
     s_y = np.array(labels)
 
     model.add_semantic_vectors(S, s_y)

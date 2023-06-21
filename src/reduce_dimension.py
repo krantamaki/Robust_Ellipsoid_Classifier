@@ -30,8 +30,7 @@ def reduce_dimension_pca(X, new_dim, scaling_factor=1):
     assert new_dim <= len(X), "PCA can only be applied if the number of datapoints exceeds or equals the new dimension!"
 
     if scaling_factor != 1:
-        scaler = scaling_factor * np.ones((X.shape[1], ))
-        X = np.array([scaler * x for x in X])
+        X = np.array([scaling_factor * x for x in X])
 
     pca = decomposition.PCA()
     pca.n_components = new_dim

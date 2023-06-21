@@ -87,9 +87,8 @@ class EllipsoidClassifier:
 
         # Rescale the datapoints
         if self.scaling_factor != 1:
-            scaler = self.scaling_factor * np.ones((X.shape[1],))
-            X = np.array([scaler * x for x in X])
-            Y = np.array([scaler * y for y in Y])
+            X = np.array([self.scaling_factor * x for x in X])
+            Y = np.array([self.scaling_factor * y for y in Y])
 
         # Train the node
         new_node = EllipsoidNode(label)
@@ -128,9 +127,8 @@ class EllipsoidClassifier:
 
         # Rescale the datapoints
         if self.scaling_factor != 1:
-            scaler = self.scaling_factor * np.ones((X.shape[1],))
-            X = np.array([scaler * x for x in X])
-            Y = np.array([scaler * y for y in Y])
+            X = np.array([self.scaling_factor * x for x in X])
+            Y = np.array([self.scaling_factor * y for y in Y])
 
         # Train the node
         new_node = EllipsoidNode(label)
@@ -274,8 +272,7 @@ class EllipsoidClassifier:
 
         # Scale the points in X_test to match the ones used in training
         if self.scaling_factor != 1:
-            scaler = self.scaling_factor * np.ones((X_test.shape[1],))
-            X_test = np.array([scaler * x for x in X_test])
+            X_test = np.array([self.scaling_factor * x for x in X_test])
 
         predictions = []
         for i in range(X_test.shape[0]):
