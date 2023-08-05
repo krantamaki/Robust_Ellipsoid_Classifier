@@ -30,7 +30,7 @@ def viz_ellipsoid(y0, X0, labels, classifier,
     else:
         raise ValueError("Number of distinct labels exceeds 10")
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     # Plot the circles representing the region allocated for each node
     for node in classifier.nodes.values():
@@ -54,6 +54,7 @@ def viz_ellipsoid(y0, X0, labels, classifier,
            xlabel=axis_names[0], ylabel=axis_names[1])
 
     ax.legend(loc='lower right')
+    plt.tight_layout()
 
     if show:
         plt.show()
@@ -108,7 +109,7 @@ def viz_boundaries(y, X, labels, classifier,
     if verbose:
         print("\nDrawing figure...")
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     ax.scatter(point_xs, point_ys, c=prediction_colors, s=50, alpha=0.01, lw=0)
 
@@ -123,6 +124,7 @@ def viz_boundaries(y, X, labels, classifier,
            xlabel=axis_names[0], ylabel=axis_names[1])
 
     ax.legend(loc='lower right')
+    plt.tight_layout()
 
     if show:
         plt.show()
@@ -138,8 +140,8 @@ def gen_points(mean, deviation, n):
 
 def main():
     # Means and standard deviations for given labels
-    means = [(0.5, 2.), (1, 1.75), (1.5, 1.25), (2., 1.)]
-    deviations = [(0.12, 0.08), (0.13, 0.17), (0.16, 0.11), (0.16, 0.07)]
+    means = [(1., 1.), (1.5, 1.5), (2., 1.), (1.25, 1.75)]
+    deviations = [(0.1, 0.08), (0.07, 0.11), (0.06, 0.09), (0.1, 0.12)]
     # means = [(1., 1.), (1., 2.), (2., 1.), (2., 2.), (1.5, 2.5), (0.4, 1.6), (0.5, 0.8), (2., 1.6)]
     # deviations = [(0.12, 0.08), (0.13, 0.17), (0.16, 0.11), (0.16, 0.07), (0.11, 0.1), (0.03, 0.05), (0.12, 0.19), (0.07, 0.1)]
 
@@ -158,7 +160,7 @@ def main():
     # Unseen label
     # mean_unseen = (1.5, 1.5)
     # dev_unseen = (0.1, 0.1)
-    unseen_means = [(0.5, 0.5)]  # , (0.75, 1.5)]
+    unseen_means = [(1.5, 1.)]  # , (0.75, 1.5)]
     unseen_deviations = [(0.1, 0.11)]  # , (0.12, 0.06)]
     unseen_labels = [f"$\mu$: {unseen_means[i]}, $\sigma^2$: {unseen_deviations[i]}" for i in range(len(unseen_means))]
 
@@ -172,6 +174,8 @@ def main():
     model.add_semantic_vectors(S, s_y)
 
     viz_boundaries(y, X, labels, model, use_sem=True)
+
+    viz_boundaries(y, X, labels, model, use_sem=False)
 
 
 if __name__ == "__main__":

@@ -34,20 +34,20 @@ def gen_points(mean, deviation, n):
 
 
 def gen_sem_vector(mean):
-    # return np.array([mean[0] ** 2 - mean[0], mean[0] ** (1 / 2) + mean[1] ** (3 / 2),
-    #                  2 * mean[1] - mean[0] ** 2, mean[1] ** 3])
+    return np.array([mean[0] ** 2 - mean[0], mean[0] ** (1 / 2) + mean[1] ** (3 / 2),
+                     2 * mean[1] - mean[0] ** 2, mean[1] ** 3])
     # return np.array([mean[0] ** 2 - mean[0], mean[0] ** (1 / 2),
     #                  2 * mean[1] - mean[1] ** (1 / 2), mean[1] ** 3])
     # return np.array([mean[0] ** 2, mean[0] ** (1 / 2),
     #                  mean[1] ** (1 / 2), mean[1] ** 2])
-    return np.array([3 * mean[0] + 3.2, 0.761 * mean[0],
-                     0.2335 * mean[1], 7 * mean[1] + 1.245])
+    # return np.array([3 * mean[0] + 3.2, 0.761 * mean[0],
+    #                  0.2335 * mean[1], 7 * mean[1] + 1.245])
     # return np.array([mean[0] ** 2, mean[1] ** 2])
 
 
 def main():
     # How many points are wanted per label
-    num_points = 100
+    num_points = 50
     # How many labels are used
     num_labels = 30
     # How many neighbors are evaluated by the k-nearest neighbor algorithm
@@ -59,7 +59,7 @@ def main():
     y = np.concatenate([[labels[i]] * num_points for i in range(num_labels)])
 
     # Visualize the datapoints
-    fig = plt.figure()
+    fig = plt.figure(figsize=[5, 5])
     ax = fig.add_subplot()
     for i in range(num_labels):
         ax.scatter(X[:, 0][i * num_points:i * num_points + num_points // 2],
@@ -69,6 +69,7 @@ def main():
                    label=labels[i])
 
     # ax.legend()
+    plt.tight_layout()
     plt.show()
 
     S = np.array([gen_sem_vector(MEANS[i]) for i in range(num_labels)])
@@ -80,38 +81,51 @@ def main():
 
     # Go from leave 0 out until leave 10 out
     for i in range(0, 10 + 1):
-        # Do test train split
-        X_train, y_train, X_test, y_test = leave_n_out_split(X, y, i, test_only_with_excluded=False, split_ratio=0.5)
-        print()
+        kneighbors_tmp = []
+        sem_tmp = []
+        base_tmp = []
 
-        # Train the models
-        model = EllipsoidClassifier(y_multiple=5)
-        model.train(X_train, y_train, "ind")
+        # As the left out labels are chosen randomly do the test 10 times and average the results together
+        for _ in range(0, 10):
+            # Do test train split
+            X_train, y_train, X_test, y_test = leave_n_out_split(X, y, i, test_only_with_excluded=False, split_ratio=0.5)
+            print()
 
-        knn = KNeighborsClassifier(k, weights="uniform").fit(X_train, y_train)
+            # Train the models
+            model = EllipsoidClassifier(y_multiple=5)
+            model.train(X_train, y_train, "ind")
 
-        # Pass semantic information to the model
-        model.add_semantic_vectors(S, sem_y)
+            knn = KNeighborsClassifier(k, weights="uniform").fit(X_train, y_train)
 
-        # Test the algorithms with semantic vectors and without
-        sem_acc.append(model.predict(X_test, y_test, use_sem=True))
-        base_acc.append(model.predict(X_test, y_test))
+            # Pass semantic information to the model
+            model.add_semantic_vectors(S, sem_y)
 
-        y_hat = knn.predict(X_test)
-        correct_classifications = [1 for y_actual, y_pred in zip(y_test, y_hat) if y_actual == y_pred]
-        kneighbors_acc.append(len(correct_classifications) / y_test.shape[0])
+            # Test the algorithms with semantic vectors and without
+            sem_tmp.append(model.predict(X_test, y_test, use_sem=True))
+            base_tmp.append(model.predict(X_test, y_test, use_sem=False))
+
+            y_hat = knn.predict(X_test)
+            correct_classifications = [1 for y_actual, y_pred in zip(y_test, y_hat) if y_actual == y_pred]
+            kneighbors_tmp.append(len(correct_classifications) / y_test.shape[0])
+
+        kneighbors_acc.append(np.array([kneighbors_tmp]).mean())
+        sem_acc.append(np.array([sem_tmp]).mean())
+        base_acc.append(np.array([base_tmp]).mean())
 
     # Plot as barplot
+    fig = plt.figure(figsize=[10, 6])
     x_axis = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-    plt.bar(np.array(x_axis) - 0.2, np.array(sem_acc) * 100, 0.2, label='Modified SVM acc with semantic vectors')
-    plt.bar(np.array(x_axis) + 0.0, np.array(kneighbors_acc) * 100, 0.2, label='k-Nearest Neighbor acc')
-    plt.bar(np.array(x_axis) + 0.2, np.array(base_acc) * 100, 0.2, label='Modified SVM acc without semantic vectors')
+    plt.bar(np.array(x_axis) - 0.2, np.array(sem_acc) * 100, 0.2, label='Our algorithm with semantic vectors')
+    plt.bar(np.array(x_axis) + 0.0, np.array(base_acc) * 100, 0.2, label='Our algorithm without semantic vectors')
+    plt.bar(np.array(x_axis) + 0.2, np.array(kneighbors_acc) * 100, 0.2, label='k-Nearest Neighbor')
 
     plt.xticks(x_axis, x_axis)
     plt.xlabel("Number of labels left out of the training data")
     plt.ylabel("Prediction accuracy (%)")
     plt.legend()
+
+    plt.tight_layout()
     plt.show()
 
 
