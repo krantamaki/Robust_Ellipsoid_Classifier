@@ -75,9 +75,12 @@ def main():
     S = np.array([gen_sem_vector(MEANS[i]) for i in range(num_labels)])
     sem_y = np.array([f"$\mu$: {MEANS[i]}, $\sigma^2$: {DEVIATIONS[i]}" for i in range(num_labels)])
 
-    kneighbors_acc = []
-    sem_acc = []
-    base_acc = []
+    kneighbors_mean = []
+    kneighbors_std = []
+    sem_mean = []
+    sem_std = []
+    base_mean = []
+    base_std = []
 
     # Go from leave 0 out until leave 10 out
     for i in range(0, 10 + 1):
@@ -108,19 +111,25 @@ def main():
             correct_classifications = [1 for y_actual, y_pred in zip(y_test, y_hat) if y_actual == y_pred]
             kneighbors_tmp.append(len(correct_classifications) / y_test.shape[0])
 
-        kneighbors_acc.append(np.array([kneighbors_tmp]).mean())
-        sem_acc.append(np.array([sem_tmp]).mean())
-        base_acc.append(np.array([base_tmp]).mean())
+        kneighbors_mean.append(np.array([kneighbors_tmp]).mean())
+        kneighbors_std.append(np.array([kneighbors_tmp]).std())
+        sem_mean.append(np.array([sem_tmp]).mean())
+        sem_std.append(np.array([sem_tmp]).std())
+        base_mean.append(np.array([base_tmp]).mean())
+        base_std.append(np.array([base_tmp]).std())
 
     # Plot as barplot
     fig = plt.figure(figsize=[10, 6])
-    x_axis = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    x_axis = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
-    plt.bar(np.array(x_axis) - 0.2, np.array(sem_acc) * 100, 0.2, label='Our algorithm with semantic vectors')
-    plt.bar(np.array(x_axis) + 0.0, np.array(base_acc) * 100, 0.2, label='Our algorithm without semantic vectors')
-    plt.bar(np.array(x_axis) + 0.2, np.array(kneighbors_acc) * 100, 0.2, label='k-Nearest Neighbor')
+    plt.errorbar(x_axis, np.array(sem_mean) * 100, np.array(sem_std) * 100, marker='o', capsize=3,
+                 label='Our algorithm with semantic vectors')
+    plt.errorbar(x_axis, np.array(base_mean) * 100, np.array(base_std) * 100, marker='o', capsize=3,
+                 label='Our algorithm without semantic vectors')
+    plt.errorbar(x_axis, np.array(kneighbors_mean) * 100, np.array(kneighbors_std) * 100, marker='o', capsize=3,
+                 label='k-Nearest Neighbor')
 
-    plt.xticks(x_axis, x_axis)
+    # plt.xticks(x_axis, x_axis)
     plt.xlabel("Number of labels left out of the training data")
     plt.ylabel("Prediction accuracy (%)")
     plt.legend()
